@@ -35,6 +35,24 @@ CPU::CPU() {
     lookup[0x0E] = { "ASL", &CPU::ASL, &CPU::ABS, 6 };
     lookup[0x1E] = { "ASL", &CPU::ASL, &CPU::ABX, 7 };
 
+    // --- SHIFT LEFT OR (SLO) [ILLEGAL] ---
+    lookup[0x03] = { "*SLO", &CPU::SLO, &CPU::IZX, 8 };
+    lookup[0x07] = { "*SLO", &CPU::SLO, &CPU::ZP0, 5 };
+    lookup[0x0F] = { "*SLO", &CPU::SLO, &CPU::ABS, 6 };
+    lookup[0x13] = { "*SLO", &CPU::SLO, &CPU::IZY, 8 };
+    lookup[0x17] = { "*SLO", &CPU::SLO, &CPU::ZPX, 6 };
+    lookup[0x1B] = { "*SLO", &CPU::SLO, &CPU::ABY, 7 };
+    lookup[0x1F] = { "*SLO", &CPU::SLO, &CPU::ABX, 7 };
+
+    // --- ROTATE LEFT AND (RLA) [ILLEGAL] ---
+    lookup[0x23] = { "*RLA", &CPU::RLA, &CPU::IZX, 8 };
+    lookup[0x27] = { "*RLA", &CPU::RLA, &CPU::ZP0, 5 };
+    lookup[0x2F] = { "*RLA", &CPU::RLA, &CPU::ABS, 6 };
+    lookup[0x33] = { "*RLA", &CPU::RLA, &CPU::IZY, 8 };
+    lookup[0x37] = { "*RLA", &CPU::RLA, &CPU::ZPX, 6 };
+    lookup[0x3B] = { "*RLA", &CPU::RLA, &CPU::ABY, 7 };
+    lookup[0x3F] = { "*RLA", &CPU::RLA, &CPU::ABX, 7 };
+
     // --- BRANCH ON CARRY CLEAR (BCC) ---
     lookup[0x90] = { "BCC", &CPU::BCC, &CPU::REL, 2 };
 
@@ -163,6 +181,14 @@ CPU::CPU() {
     lookup[0xAC] = { "LDY", &CPU::LDY, &CPU::ABS, 4 };
     lookup[0xBC] = { "LDY", &CPU::LDY, &CPU::ABX, 4 };
 
+    // --- LOAD A AND X (LAX) [ILLEGAL] ---
+    lookup[0xA3] = { "*LAX", &CPU::LAX, &CPU::IZX, 6 };
+    lookup[0xA7] = { "*LAX", &CPU::LAX, &CPU::ZP0, 3 };
+    lookup[0xAF] = { "*LAX", &CPU::LAX, &CPU::ABS, 4 };
+    lookup[0xB3] = { "*LAX", &CPU::LAX, &CPU::IZY, 5 };
+    lookup[0xB7] = { "*LAX", &CPU::LAX, &CPU::ZPY, 4 };
+    lookup[0xBF] = { "*LAX", &CPU::LAX, &CPU::ABY, 4 };
+
     // --- LOGICAL SHIFT RIGHT (LSR) ---
     lookup[0x4A] = { "LSR", &CPU::LSR, &CPU::IMP, 2 };
     lookup[0x46] = { "LSR", &CPU::LSR, &CPU::ZP0, 5 };
@@ -170,8 +196,57 @@ CPU::CPU() {
     lookup[0x4E] = { "LSR", &CPU::LSR, &CPU::ABS, 6 };
     lookup[0x5E] = { "LSR", &CPU::LSR, &CPU::ABX, 7 };
 
+    // --- SHIFT RIGHT EOR (SRE) [ILLEGAL] ---
+    lookup[0x43] = { "*SRE", &CPU::SRE, &CPU::IZX, 8 };
+    lookup[0x47] = { "*SRE", &CPU::SRE, &CPU::ZP0, 5 };
+    lookup[0x4F] = { "*SRE", &CPU::SRE, &CPU::ABS, 6 };
+    lookup[0x53] = { "*SRE", &CPU::SRE, &CPU::IZY, 8 };
+    lookup[0x57] = { "*SRE", &CPU::SRE, &CPU::ZPX, 6 };
+    lookup[0x5B] = { "*SRE", &CPU::SRE, &CPU::ABY, 7 };
+    lookup[0x5F] = { "*SRE", &CPU::SRE, &CPU::ABX, 7 };
+
     // --- NO OPERATION (NOP) ---
     lookup[0xEA] = { "NOP", &CPU::NOP, &CPU::IMP, 2 };
+
+    // --- ILLEGAL NOPs (Unofficial) ---
+    // Group 1: IMPLIED NOPs (1 byte, 2 cycles)
+    lookup[0x1A] = { "*NOP", &CPU::NOP, &CPU::IMP, 2 };
+    lookup[0x3A] = { "*NOP", &CPU::NOP, &CPU::IMP, 2 };
+    lookup[0x5A] = { "*NOP", &CPU::NOP, &CPU::IMP, 2 };
+    lookup[0x7A] = { "*NOP", &CPU::NOP, &CPU::IMP, 2 };
+    lookup[0xDA] = { "*NOP", &CPU::NOP, &CPU::IMP, 2 };
+    lookup[0xFA] = { "*NOP", &CPU::NOP, &CPU::IMP, 2 };
+
+    // Group 2: IMMEDIATE NOPs (2 bytes, 2 cycles)
+    lookup[0x80] = { "*NOP", &CPU::NOP, &CPU::IMM, 2 };
+    lookup[0x82] = { "*NOP", &CPU::NOP, &CPU::IMM, 2 };
+    lookup[0x89] = { "*NOP", &CPU::NOP, &CPU::IMM, 2 };
+    lookup[0xC2] = { "*NOP", &CPU::NOP, &CPU::IMM, 2 };
+    lookup[0xE2] = { "*NOP", &CPU::NOP, &CPU::IMM, 2 };
+
+    // Group 3: ZERO PAGE NOPs (2 bytes, 3 cycles)
+    lookup[0x04] = { "*NOP", &CPU::NOP, &CPU::ZP0, 3 };
+    lookup[0x44] = { "*NOP", &CPU::NOP, &CPU::ZP0, 3 };
+    lookup[0x64] = { "*NOP", &CPU::NOP, &CPU::ZP0, 3 };
+
+    // Group 3b: ZERO PAGE X NOPs (3 bytes, 4 cycles)
+    lookup[0x14] = { "*NOP", &CPU::NOP, &CPU::ZPX, 4 };
+    lookup[0x34] = { "*NOP", &CPU::NOP, &CPU::ZPX, 4 };
+    lookup[0x54] = { "*NOP", &CPU::NOP, &CPU::ZPX, 4 };
+    lookup[0x74] = { "*NOP", &CPU::NOP, &CPU::ZPX, 4 };
+    lookup[0xD4] = { "*NOP", &CPU::NOP, &CPU::ZPX, 4 };
+    lookup[0xF4] = { "*NOP", &CPU::NOP, &CPU::ZPX, 4 };
+
+    // Group 4: ABSOLUTE NOPs (3 bytes, 4 cycles)
+    lookup[0x0C] = { "*NOP", &CPU::NOP, &CPU::ABS, 4 };
+
+    // Group 5: ABSOLUTE X NOPs (3 bytes, 4 cycles*)
+    lookup[0x1C] = { "*NOP", &CPU::NOP, &CPU::ABX, 4 };
+    lookup[0x3C] = { "*NOP", &CPU::NOP, &CPU::ABX, 4 };
+    lookup[0x5C] = { "*NOP", &CPU::NOP, &CPU::ABX, 4 };
+    lookup[0x7C] = { "*NOP", &CPU::NOP, &CPU::ABX, 4 };
+    lookup[0xDC] = { "*NOP", &CPU::NOP, &CPU::ABX, 4 };
+    lookup[0xFC] = { "*NOP", &CPU::NOP, &CPU::ABX, 4 };
 
     // --- LOGICAL OR (ORA) ---
     lookup[0x09] = { "ORA", &CPU::ORA, &CPU::IMM, 2 };
@@ -209,6 +284,15 @@ CPU::CPU() {
     lookup[0x6E] = { "ROR", &CPU::ROR, &CPU::ABS, 6 };
     lookup[0x7E] = { "ROR", &CPU::ROR, &CPU::ABX, 7 };
 
+    // --- ROTATE RIGHT ADD (RRA) [ILLEGAL] ---
+    lookup[0x63] = { "*RRA", &CPU::RRA, &CPU::IZX, 8 };
+    lookup[0x67] = { "*RRA", &CPU::RRA, &CPU::ZP0, 5 };
+    lookup[0x6F] = { "*RRA", &CPU::RRA, &CPU::ABS, 6 };
+    lookup[0x73] = { "*RRA", &CPU::RRA, &CPU::IZY, 8 };
+    lookup[0x77] = { "*RRA", &CPU::RRA, &CPU::ZPX, 6 };
+    lookup[0x7B] = { "*RRA", &CPU::RRA, &CPU::ABY, 7 };
+    lookup[0x7F] = { "*RRA", &CPU::RRA, &CPU::ABX, 7 };
+
     // --- RETURN FROM INTERRUPT (RTI) ---
     lookup[0x40] = { "RTI", &CPU::RTI, &CPU::IMP, 6 };
 
@@ -219,11 +303,21 @@ CPU::CPU() {
     lookup[0xE9] = { "SBC", &CPU::SBC, &CPU::IMM, 2 };
     lookup[0xE5] = { "SBC", &CPU::SBC, &CPU::ZP0, 3 };
     lookup[0xF5] = { "SBC", &CPU::SBC, &CPU::ZPX, 4 };
+    lookup[0xEB] = { "*SBC", &CPU::SBC, &CPU::IMM, 2 };
     lookup[0xED] = { "SBC", &CPU::SBC, &CPU::ABS, 4 };
     lookup[0xFD] = { "SBC", &CPU::SBC, &CPU::ABX, 4 };
     lookup[0xF9] = { "SBC", &CPU::SBC, &CPU::ABY, 4 };
     lookup[0xE1] = { "SBC", &CPU::SBC, &CPU::IZX, 6 };
     lookup[0xF1] = { "SBC", &CPU::SBC, &CPU::IZY, 5 };
+
+    // --- INCREMENT AND SUBTRACT (ISB) [ILLEGAL] ---
+    lookup[0xE3] = { "*ISB", &CPU::ISB, &CPU::IZX, 8 };
+    lookup[0xE7] = { "*ISB", &CPU::ISB, &CPU::ZP0, 5 };
+    lookup[0xEF] = { "*ISB", &CPU::ISB, &CPU::ABS, 6 };
+    lookup[0xF3] = { "*ISB", &CPU::ISB, &CPU::IZY, 8 };
+    lookup[0xF7] = { "*ISB", &CPU::ISB, &CPU::ZPX, 6 };
+    lookup[0xFB] = { "*ISB", &CPU::ISB, &CPU::ABY, 7 };
+    lookup[0xFF] = { "*ISB", &CPU::ISB, &CPU::ABX, 7 };
 
     // --- SET CARRY (SEC) ---
     lookup[0x38] = { "SEC", &CPU::SEC, &CPU::IMP, 2 };
@@ -253,6 +347,21 @@ CPU::CPU() {
     lookup[0x94] = { "STY", &CPU::STY, &CPU::ZPX, 4 };
     lookup[0x8C] = { "STY", &CPU::STY, &CPU::ABS, 4 };
 
+    // --- STORE A AND X (SAX) [ILLEGAL] ---
+    lookup[0x83] = { "*SAX", &CPU::SAX, &CPU::IZX, 6 };
+    lookup[0x87] = { "*SAX", &CPU::SAX, &CPU::ZP0, 3 };
+    lookup[0x8F] = { "*SAX", &CPU::SAX, &CPU::ABS, 4 };
+    lookup[0x97] = { "*SAX", &CPU::SAX, &CPU::ZPY, 4 };
+
+    // --- DECREMENT AND COMPARE (DCP) [ILLEGAL] ---
+    lookup[0xC3] = { "*DCP", &CPU::DCP, &CPU::IZX, 8 };
+    lookup[0xC7] = { "*DCP", &CPU::DCP, &CPU::ZP0, 5 };
+    lookup[0xCF] = { "*DCP", &CPU::DCP, &CPU::ABS, 6 };
+    lookup[0xD3] = { "*DCP", &CPU::DCP, &CPU::IZY, 8 };
+    lookup[0xD7] = { "*DCP", &CPU::DCP, &CPU::ZPX, 6 };
+    lookup[0xDF] = { "*DCP", &CPU::DCP, &CPU::ABX, 7 };
+    lookup[0xDB] = { "*DCP", &CPU::DCP, &CPU::ABY, 7 };
+
     // --- TRANSFER ACCUMULATOR TO X (TAX) ---
     lookup[0xAA] = { "TAX", &CPU::TAX, &CPU::IMP, 2 };
 
@@ -273,7 +382,7 @@ CPU::CPU() {
 }
 
 uint8_t CPU::read(uint16_t addr) {
-    return bus->read(addr, false);
+    return bus->read(addr);
 }
 
 void CPU::write(uint16_t addr, uint8_t data) {
@@ -306,7 +415,8 @@ void CPU::reset(){
     uint16_t lo = read(0xFFFC);
     uint16_t hi = read(0xFFFD);
     pc = (hi << 8) | lo;
-
+    pc = 0xC000;
+    
     a = 0x00;
     x = 0x00;
     y = 0x00;
@@ -324,9 +434,8 @@ void CPU::irq() {
         return;
     stack_push((pc >> 8) & 0x00FF);
     stack_push(pc & 0x00FF);
-    set_flag(B, false);
+    stack_push(status & ~B);
     set_flag(I, true);
-    stack_push(status);
 
     uint16_t lo = read(0xFFFE);
     uint16_t hi = read(0xFFFF);
@@ -339,9 +448,8 @@ void CPU::irq() {
 void CPU::nmi() {
     stack_push((pc >> 8) & 0x00FF);
     stack_push(pc & 0x00FF);
-    set_flag(B, false);
+    stack_push(status & ~B);
     set_flag(I, true);
-    stack_push(status);
 
     uint16_t lo = read(0xFFFA);
     uint16_t hi = read(0xFFFB);
@@ -363,18 +471,19 @@ uint8_t CPU::stack_pop() {
 }
 
 void CPU::clock() {
-    if (cycles == 0) {
-        opcode = read(pc++);
+    opcode = read(pc++);
+    
+    cycles = 0;
 
-        cycles = lookup[opcode].cycles;
+    uint8_t base_cycles = lookup[opcode].cycles;
+    
+    uint8_t additional_cycle1 = (this->*lookup[opcode].addr_mode)();
+    
+    uint8_t additional_cycle2 = (this->*lookup[opcode].operate)();
 
-        uint8_t additional_cycle1 = (this->*lookup[opcode].addr_mode)();
-        uint8_t additional_cycle2 = (this->*lookup[opcode].operate)();
-
-        cycles += (additional_cycle1 & additional_cycle2);
-    }
-    cycles--;
-    total_cycles++;
+    uint8_t instruction_cycles = base_cycles + (additional_cycle1 & additional_cycle2) + cycles;
+    
+    total_cycles += instruction_cycles;
 }
 
 
@@ -463,8 +572,9 @@ uint8_t CPU::IND() {
 
 uint8_t CPU::IZX() {
     uint16_t t = read(pc++);
-    uint16_t lo = read((static_cast<uint16_t>(t) + static_cast<uint16_t>(x)) & 0x00FF);
-    uint16_t hi = read((static_cast<uint16_t>(t) + static_cast<uint16_t>(x) + 1) & 0x00FF);
+    uint16_t zp_addr = (static_cast<uint16_t>(t) + static_cast<uint16_t>(x)) & 0x00FF;
+    uint16_t lo = read(zp_addr);
+    uint16_t hi = read((zp_addr + 1) & 0x00FF);
     addr_abs = (hi << 8) | lo;
     return 0;
 }
@@ -473,7 +583,8 @@ uint8_t CPU::IZY() {
     uint16_t t = read(pc++);
     uint16_t lo = read(t & 0x00FF);
     uint16_t hi = read((t + 1) & 0x00FF);
-    addr_abs = (hi << 8) | lo;
+    uint16_t zp_value = (hi << 8) | lo;  // The value read from the zero page
+    addr_abs = zp_value;
     addr_abs += y;
 
     if ((addr_abs & 0xFF00) != (hi << 8))
@@ -574,8 +685,8 @@ uint8_t CPU::BRK() {
     stack_push((pc >> 8) & 0x00FF);
     stack_push(pc & 0x00FF);
 
-    set_flag(B, true);
-    stack_push(status);
+    // You push the status with B flag set and not set the actual flag in the status register
+    stack_push(status | 0x10);
     set_flag(I, true);
 
     uint16_t lo = read(0xFFFE);
@@ -641,11 +752,26 @@ uint8_t CPU::CPY() {
     return 0;
 }
 
+uint8_t CPU::DCP(){
+    fetch();
+    uint16_t temp = static_cast<uint16_t>(fetched) - 1;
+
+    write(addr_abs, temp & 0x00FF);
+
+    uint16_t result = static_cast<uint16_t>(a) - temp;
+    set_flag(C, a >= (temp & 0xFF));
+    set_flag(Z, (result & 0xFF) == 0x0000);
+    set_flag(N, result & 0x80);
+
+    return 0;
+}
+
 uint8_t CPU::DEC(){
     fetch();
     uint16_t temp = static_cast<uint16_t>(fetched) - 1;
     set_flag(Z, (temp & 0x00FF) == 0x0000);
     set_flag(N, temp & 0x80);
+    write(addr_abs, temp & 0x00FF);
     return 0;
 }
 
@@ -676,6 +802,7 @@ uint8_t CPU::INC() {
     uint16_t temp = static_cast<uint16_t>(fetched) + 1;
     set_flag(Z, (temp & 0x00FF) == 0x0000);
     set_flag(N, temp & 0x80);
+    write(addr_abs, temp & 0x00FF);
     return 0;
 }
 
@@ -690,6 +817,23 @@ uint8_t CPU::INY() {
     y++;
     set_flag(Z, y == 0x00);
     set_flag(N, y & 0x80);
+    return 0;
+}
+
+uint8_t CPU::ISB() {
+    fetch();
+    uint16_t temp = static_cast<uint16_t>(fetched) + 1;
+
+    write(addr_abs, temp & 0x00FF);
+
+    uint16_t result = static_cast<uint16_t>(a) - (temp & 0x00FF) - (1 - get_flag(C));
+
+    set_flag(C, result <= 0x00FF);
+    set_flag(Z, (result & 0x00FF) == 0x0000);
+    set_flag(V, ((static_cast<uint16_t>(a) ^ static_cast<uint16_t>(result)) & (static_cast<uint16_t>(a) ^ static_cast<uint16_t>(temp & 0x00FF))) & 0x0080);
+    set_flag(N, result & 0x80);
+    a = result & 0x00FF;
+
     return 0;
 }
 
@@ -709,6 +853,15 @@ uint8_t CPU::JSR() {
 }
 
 // --- LOAD & STORE ---
+uint8_t CPU::LAX(){
+    fetch();
+    a = fetched;
+    x = fetched;
+    set_flag(Z, a == 0x00);
+    set_flag(N, a & 0x80);
+    return 1;
+}
+
 uint8_t CPU::LDA() {
     fetch();
     a = fetched;
@@ -750,7 +903,7 @@ uint8_t CPU::LSR() {
 }
 
 uint8_t CPU::NOP() {
-    return 0;
+    return 1;
 }
 
 uint8_t CPU::ORA() {
@@ -779,9 +932,21 @@ uint8_t CPU::PLA() {
 }
 
 uint8_t CPU::PLP() {
-    // ~B
-    status = stack_pop();
+    status = stack_pop() & ~B;
     set_flag(U, true);
+    return 0;
+}
+
+uint8_t CPU::RLA() {
+    fetch();
+    uint16_t temp = (static_cast<uint16_t>(fetched) << 1) | get_flag(C);
+    set_flag(C, temp & 0xFF00);
+    write(addr_abs, temp & 0x00FF);
+
+    a &= temp & 0x00FF;
+    set_flag(Z, a == 0x00);
+    set_flag(N, a & 0x80);
+
     return 0;
 }
 
@@ -817,8 +982,24 @@ uint8_t CPU::ROR() {
     return 0;
 }
 
+uint8_t CPU::RRA() {
+    fetch();
+    uint16_t temp = static_cast<uint16_t>(fetched) >> 1 | (get_flag(C) << 7);
+    set_flag(C, fetched & 0x01);
+    write(addr_abs, temp & 0x00FF);
+
+    uint16_t result = static_cast<uint16_t>(a) + (temp & 0x00FF) + get_flag(C);
+    set_flag(C, result > 0x00FF);
+    set_flag(Z, (result & 0x00FF) == 0x0000);
+    set_flag(V, (~(static_cast<uint16_t>(a) ^ static_cast<uint16_t>(temp)) & (static_cast<uint16_t>(a) ^ static_cast<uint16_t>(result))) & 0x0080);
+    set_flag(N, result & 0x80);
+    a = result & 0x00FF;
+
+    return 0;
+}
+
 uint8_t CPU::RTI() {
-    status = stack_pop();
+    status = stack_pop() & ~B;
     set_flag(U, true);
     uint16_t lo = stack_pop();
     uint16_t hi = stack_pop();
@@ -833,10 +1014,16 @@ uint8_t CPU::RTS() {
     return 0;
 }
 
+uint8_t CPU::SAX() {
+    uint8_t temp = a & x;
+    write(addr_abs, temp);
+    return 0;
+}
+
 uint8_t CPU::SBC() {
     fetch();
     uint16_t temp = static_cast<uint16_t>(a) - static_cast<uint16_t>(fetched) - static_cast<uint16_t>(1 - get_flag(C));
-    set_flag(C, temp > 0x00FF);
+    set_flag(C, temp <= 0x00FF);
     set_flag(Z, (temp & 0x00FF) == 0x0000);
     set_flag(V, ((static_cast<uint16_t>(a) ^ static_cast<uint16_t>(fetched)) & (static_cast<uint16_t>(a) ^ static_cast<uint16_t>(temp))) & 0x0080);
     set_flag(N, temp & 0x80);
@@ -856,6 +1043,32 @@ uint8_t CPU::SED() {
 
 uint8_t CPU::SEI() {
     set_flag(I, true);
+    return 0;
+}
+
+uint8_t CPU::SLO(){
+    fetch();
+    uint16_t temp = static_cast<uint16_t>(fetched) << 1;
+    set_flag(C, temp & 0xFF00);
+    write(addr_abs, temp & 0x00FF);
+
+    a |= temp & 0x00FF;
+    set_flag(Z, a == 0x00);
+    set_flag(N, a & 0x80);
+
+    return 0;
+}
+
+uint8_t CPU::SRE(){
+    fetch();
+    uint16_t temp = fetched >> 1;
+    set_flag(C, fetched & 0x01);
+    write(addr_abs, temp & 0x00FF);
+
+    a ^= temp & 0x00FF;
+    set_flag(Z, a == 0x00);
+    set_flag(N, a & 0x80);
+
     return 0;
 }
 

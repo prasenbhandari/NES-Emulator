@@ -2,16 +2,38 @@
 
 #include <cstdint>
 #include <string>
-#include <sys/types.h>
 #include <array>
 
 class Bus;
 
 class CPU {
-    public: 
+    public:
         CPU();
 
-    public:
+        void connect_bus(Bus* n) { bus = n; }
+        void clock();
+        void reset();
+        void irq();
+        void nmi();
+
+        struct DisassembledInstruction {
+            uint16_t address;
+            std::string hex_bytes;
+            std::string instruction;
+            std::string name;
+            uint8_t length;
+        };
+
+        uint16_t get_pc() const { return pc; }
+        uint32_t get_total_cycles() const { return total_cycles; }
+        uint8_t get_a() const { return a; }
+        uint8_t get_x() const { return x; }
+        uint8_t get_y() const { return y; }
+        uint8_t get_sp() const { return sp; }
+        uint8_t get_status() const { return status; }
+
+    private:
+        // Registers
         uint8_t a = 0x00;
         uint8_t x = 0x00;
         uint8_t y = 0x00;
@@ -28,14 +50,12 @@ class CPU {
 
         std::array<INSTRUCTION, 256> lookup;
 
-        void connect_bus(Bus* n) { bus = n; }
-
         // Addressing Modes
         uint8_t IMP(); uint8_t IMM(); uint8_t ZP0(); uint8_t ZPX();
         uint8_t ZPY(); uint8_t REL(); uint8_t ABS(); uint8_t ABX();
         uint8_t ABY(); uint8_t IND(); uint8_t IZX(); uint8_t IZY();
 
-        // Opcodes
+        // Official Instructions
         uint8_t ADC(); uint8_t AND(); uint8_t ASL(); uint8_t BCC();
         uint8_t BCS(); uint8_t BEQ(); uint8_t BIT(); uint8_t BMI();
         uint8_t BNE(); uint8_t BPL(); uint8_t BRK(); uint8_t BVC();
@@ -51,15 +71,13 @@ class CPU {
         uint8_t STX(); uint8_t STY(); uint8_t TAX(); uint8_t TAY();
         uint8_t TSX(); uint8_t TXA(); uint8_t TXS(); uint8_t TYA();
 
-        // Illegal Opcode
+        // Illegal instruction
+        uint8_t LAX(); uint8_t SAX(); uint8_t DCP(); uint8_t ISB();
+        uint8_t SLO(); uint8_t RLA(); uint8_t SRE(); uint8_t RRA();
+
         uint8_t XXX();
 
-        void clock();
-        void reset();
-        void irq();
-        void nmi();
-
-    private:
+        // Internal state
         uint8_t fetched = 0x00;
         uint16_t addr_abs = 0x0000;
         uint16_t addr_rel = 0x0000;
