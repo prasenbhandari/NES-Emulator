@@ -49,6 +49,14 @@ bool Cartridge::load(const std::string &filename) {
     }
     // TODO: Add other mappers here
 
+    // Set mirroring mode from iNES header
+    if (mapper) {
+        MirrorMode mirror_mode = (header.mapper1 & 0x01) 
+            ? MirrorMode::VERTICAL 
+            : MirrorMode::HORIZONTAL;
+        mapper->set_mirror_mode(mirror_mode);
+    }
+
     rom.close();
     return true;
 }

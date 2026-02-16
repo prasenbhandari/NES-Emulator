@@ -1,12 +1,14 @@
 
 #include "core/Bus.h"
 #include "core/CPU.h"
+#include "core/PPU.h"
 #include <iostream>
 #include <iomanip>
 
 int main() {
     Bus bus;
     CPU cpu;
+    PPU ppu;
     Cartridge cartridge;
 
     if (!cartridge.load("../roms/tests/nestest.nes")) {
@@ -16,7 +18,9 @@ int main() {
 
     bus.connect_cpu(&cpu);
     bus.connect_cartridge(&cartridge);
+    bus.connect_ppu(&ppu);
     cpu.connect_bus(&bus);
+    ppu.connect_cartridge(&cartridge);
 
     // Reset CPU to start at the RESET vector ($FFFC)
     cpu.reset();

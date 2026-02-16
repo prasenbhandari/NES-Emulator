@@ -1,6 +1,5 @@
 #include "core/CPU.h"
 #include "core/Bus.h"
-#include <cstdint>
 
 CPU::CPU() {
     // Initialize all instructions to be illegal (XXX)
@@ -686,7 +685,7 @@ uint8_t CPU::BRK() {
     stack_push(pc & 0x00FF);
 
     // You push the status with B flag set and not set the actual flag in the status register
-    stack_push(status | 0x10);
+    stack_push(status | ~B);
     set_flag(I, true);
 
     uint16_t lo = read(0xFFFE);

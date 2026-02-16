@@ -26,3 +26,8 @@ uint8_t MMC0::ppu_read(uint16_t addr) {
 void MMC0::ppu_write(uint16_t addr, uint8_t data) {
     // No-op
 }
+
+
+MirrorMode MMC0::get_mirror_mode() const {
+    return mirror_mode;
+}
