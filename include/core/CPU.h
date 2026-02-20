@@ -26,6 +26,7 @@ class CPU {
 
         uint16_t get_pc() const { return pc; }
         uint32_t get_total_cycles() const { return total_cycles; }
+        uint8_t get_last_instruction_cycles() const { return last_instruction_cycles; }
         uint8_t get_a() const { return a; }
         uint8_t get_x() const { return x; }
         uint8_t get_y() const { return y; }
@@ -84,6 +85,7 @@ class CPU {
         uint8_t opcode = 0x00;
         uint8_t cycles = 0;
         uint32_t total_cycles = 0;
+        uint8_t last_instruction_cycles = 0;
 
         enum StatusFlag {
             C = (1 << 0),   // Carry

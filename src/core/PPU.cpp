@@ -2,6 +2,7 @@
 
 PPU::PPU() {
     registers.fill(0);
+    vram_address = 0x0000;
 }
 
 void PPU::connect_cartridge(Cartridge* cart) {
@@ -9,6 +10,17 @@ void PPU::connect_cartridge(Cartridge* cart) {
     if (cartridge && cartridge->get_mapper()) {
         mirror_mode = cartridge->get_mapper()->get_mirror_mode();
     }
+}
+
+void PPU::reset(){
+    registers.fill(0);
+    vram_address = 0x0000;
+    temp_vram_address = 0x0000;
+    address_latch = false;
+    fine_x = 0;
+    data_buffer = 0;
+    scanline = 0;
+    cycle = 0;
 }
 
 uint8_t PPU::cpu_read(uint16_t addr) {
@@ -29,12 +41,20 @@ uint8_t PPU::cpu_read(uint16_t addr) {
             break;
 
         case 0x0007: // PPUDATA
-            data = data_buffer;
-            data_buffer = read(vram_address);
-
-            if(vram_address >= 0x3F00){
-                data = data_buffer;     // TODO: May need to implment palette quirk
+            if (vram_address >= 0x3F00) {
+                data = read(vram_address);
+                
+                if (registers[0x0001] & 0x01) {
+                    data &= 0xF0;
+                }
+                
+                uint16_t shadowed_addr = vram_address - 0x1000;
+                data_buffer = read(shadowed_addr);
+            } else {
+                data = data_buffer;
+                data_buffer = read(vram_address);
             }
+            
             vram_address += (registers[0x0000] & 0x04) ? 32 : 1;
             break;
     }
@@ -47,12 +67,20 @@ void PPU::cpu_write(uint16_t addr, uint8_t data) {
     uint8_t reg = addr & 0x0007;
 
     switch (reg){
-        case 0x0000: // PPUCTRL
+        case 0x0000: { // PPUCTRL
+            bool nmi_enabled_before = registers[reg] & 0x80;
+            bool nmi_enabled_now = data & 0x80;
+            
             registers[reg] = data;
 
             temp_vram_address &= ~MASK_NAMETABLE;
             temp_vram_address |= (data & 0x03) << 10;
+            
+            if (!nmi_enabled_before && nmi_enabled_now && (registers[0x0002] & 0x80)) {
+                nmi_occurred = true;
+            }
             break;
+        }
 
         case 0x0001: // PPUMASK
             registers[reg] = data;
@@ -62,10 +90,15 @@ void PPU::cpu_write(uint16_t addr, uint8_t data) {
             registers[reg] = data;
             break;
         
-        case 0x0004: // OAMDATA
-            oam[registers[0x0003]] = data;
-            registers[0x0003]++;
+        case 0x0004:{ // OAMDATA
+            // Ignore writes during rendering (scanlines 0-239 and pre-render 261)
+            bool rendering = (scanline < 240 || scanline == 261) && ((registers[0x0001] & 0x18) != 0);
+            if (!rendering) {
+                oam[registers[0x0003]] = data;
+                registers[0x0003]++;
+            }
             break;
+        }   
 
         case 0x0005:{ // PPUSCROLL
             if (!address_latch){
@@ -194,26 +227,150 @@ void PPU::write(uint16_t addr, uint8_t data) {
     }
 }
 
+void PPU::extract_pixel(){
+    if (scanline >= 240) return;
+    
+    uint8_t bg_pixel = 0x00;
+    uint8_t bg_palette = 0x00;
+
+    if (registers[0x0001] & 0x08) { // Background rendering enabled
+        uint16_t bit_mux = 0x8000 >> fine_x;
+
+        uint8_t p0_pixel = (bg_pattern_shift_low & bit_mux) ? 1 : 0;
+        uint8_t p1_pixel = (bg_pattern_shift_high & bit_mux) ? 1 : 0;
+        bg_pixel = (p1_pixel << 1) | p0_pixel;
+
+        uint8_t a0_bit = (bg_attribute_shift_low & bit_mux) ? 1 : 0;
+        uint8_t a1_bit = (bg_attribute_shift_high & bit_mux) ? 1 : 0;
+        bg_palette = (a1_bit << 1) | a0_bit;
+    }
+
+    // Check left-edge clipping (bit 1 of PPUMASK: show background in leftmost 8 pixels)
+    if (!(registers[0x0001] & 0x02) && cycle <= 8) {
+        bg_pixel = 0;  // Clip to backdrop
+        bg_palette = 0;
+    }
+
+    if (bg_pixel == 0) {
+        bg_palette = 0; // Use universal background color for palette 0
+    }
+
+    uint8_t palette_index = read(0x3F00 + (bg_palette << 2) + bg_pixel) & 0x3F;
+    
+    // Apply greyscale mode
+    if (registers[0x0001] & 0x01) {
+        palette_index &= 0x30;
+    }
+    
+    uint32_t color = NES_PALETTE[palette_index];
+    uint32_t pixel_index = (scanline * 256) + (cycle - 1);
+    frame_buffer[pixel_index] = color;
+}
+
 void PPU::clock() {
+    bool rendering_enabled = (registers[0x0001] & 0x18) != 0;
 
-    if ((scanline < 240 || scanline == 261) && (cycle >= 1 && cycle <= 256)) {
-        switch (cycle % 8) {
-            
+    if (rendering_enabled && (scanline < 240 || scanline == 261) && 
+        ((cycle >= 1 && cycle <= 256) || (cycle >= 321 && cycle <= 336))) {
+        switch ((cycle - 1) % 8) {
+            case 0:{
+                bg_pattern_shift_low = (bg_pattern_shift_low & 0xFF00) | bg_next_tile_lsb;
+                bg_pattern_shift_high = (bg_pattern_shift_high & 0xFF00) | bg_next_tile_msb;
 
+                uint8_t palette_id = bg_next_tile_attribute;
+
+                if (vram_address & 0x02) palette_id >>= 2;
+                if(vram_address & 0x40) palette_id >>= 4;
+
+                palette_id &= 0x03;
+
+                bg_attribute_shift_low = (bg_attribute_shift_low & 0xFF00) | ((palette_id & 0x01) ? 0xFF : 0x00);
+                bg_attribute_shift_high = (bg_attribute_shift_high & 0xFF00) | ((palette_id & 0x02) ? 0xFF : 0x00);
+
+                if((vram_address & MASK_COARSE_X) == 31){
+                    vram_address &= ~MASK_COARSE_X;
+
+                    vram_address ^= 0x0400;
+                }else{
+                    vram_address++;
+                }
+
+                break;
+            }
+            case 1:
+                bg_next_tile_id = read(0x2000 | (vram_address & 0x0FFF));
+                break;
+
+            case 3:
+                bg_next_tile_attribute = read(0x23C0 | (vram_address & 0x0C00) | ((vram_address >> 4) & 0x38) | ((vram_address >> 2) & 0x07));
+                break;
+
+            case 5: {
+                uint16_t pattern_addr = (registers[0x0000] & 0x10 ? 0x1000 : 0x0000) + (bg_next_tile_id * 16) + (vram_address >> 12);
+                bg_next_tile_lsb = read(pattern_addr);
+                break;
+            }
+            case 7: {
+                uint16_t pattern_addr = (registers[0x0000] & 0x10 ? 0x1000 : 0x0000) + (bg_next_tile_id * 16) + (vram_address >> 12) + 8;
+                bg_next_tile_msb = read(pattern_addr);
+                break;
+            }
         }
-    }   
 
-    cycle++;
-    if (cycle >= 341) {
-        cycle = 0;
-        scanline++;
+        if (cycle == 256){
+            if((vram_address & MASK_FINE_Y) != MASK_FINE_Y){
+                vram_address += 0x1000; // Increment fine Y
+            }else{
+                vram_address &= ~MASK_FINE_Y; // Reset fine Y
 
-        if (scanline >= 261) {
-            scanline = -1;
-            frames++;
-            frame_complete = true;
+                uint16_t coarse_y = (vram_address & MASK_COARSE_Y) >> 5;
+                if (coarse_y == 29) {
+                    coarse_y = 0;
+                    vram_address ^= 0x0800; // Switch vertical nametable
+                } else if (coarse_y == 31) {
+                    coarse_y = 0;
+                } else {
+                    coarse_y++;
+                }
+
+                vram_address = (vram_address & ~MASK_COARSE_Y) | (coarse_y << 5);
+            }
         }
     }
+
+    if (rendering_enabled && (scanline < 240 || scanline == 261) && cycle == 257){
+        vram_address = (vram_address & ~0x041F) | (temp_vram_address & 0x041F);
+    }
+
+    if (rendering_enabled && (scanline < 240 || scanline == 261) && 
+        (cycle >= 257 && cycle <= 320)) {
+        registers[0x0003] = 0;
+    }
+
+    if (scanline < 240 && cycle >= 1 && cycle <= 256) {
+        extract_pixel();
+    }
+
+    if (rendering_enabled && (scanline < 240 || scanline == 261) && 
+        ((cycle >= 1 && cycle <= 256) || (cycle >= 321 && cycle <= 336))) {
+        
+        bg_pattern_shift_low <<= 1;
+        bg_pattern_shift_high <<= 1;
+        bg_attribute_shift_low <<= 1;
+        bg_attribute_shift_high <<= 1;
+    }
+
+    if (rendering_enabled && (scanline < 240 || scanline == 261) && 
+        (cycle >= 257 && cycle <= 320)) {
+        if (cycle % 8 == 1) {
+            read(0x2000 | (vram_address & 0x0FFF));
+        }
+    }
+
+    if (rendering_enabled && (scanline < 240 || scanline == 261) && 
+        (cycle == 337 || cycle == 339)) {
+        read(0x2000 | (vram_address & 0x0FFF));
+    }   
 
     if (scanline == 241 && cycle == 1) {
         registers[0x0002] |= 0x80; // Set VBlank flag
@@ -222,8 +379,12 @@ void PPU::clock() {
             nmi_occurred = true;
     }
 
-    if (scanline == -1 && cycle == 1) {
-        registers[0x0002] &= ~0x80; // Clear VBlank flag
+    if (scanline == 261 && cycle == 1) {
+        registers[0x0002] &= ~0xE0; // Clear VBlank, sprite 0 hit, and sprite overflow flags
+    }
+
+    if (scanline == 261 && cycle >= 280 && cycle <= 304){
+        vram_address = (vram_address & ~0x7BE0) | (temp_vram_address & 0x7BE0);
     }
 
     if (scanline == 261 && cycle == 339){
@@ -234,6 +395,18 @@ void PPU::clock() {
                 scanline = 0;
                 frames++;
             }
+        }
+    }
+    
+    cycle++;
+    if (cycle >= 341) {
+        cycle = 0;
+        scanline++;
+
+        if (scanline > 261) {
+            scanline = 0;
+            frames++;
+            frame_complete = true;
         }
     }
 }

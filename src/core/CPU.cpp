@@ -414,8 +414,7 @@ void CPU::reset(){
     uint16_t lo = read(0xFFFC);
     uint16_t hi = read(0xFFFD);
     pc = (hi << 8) | lo;
-    pc = 0xC000;
-    
+
     a = 0x00;
     x = 0x00;
     y = 0x00;
@@ -480,9 +479,9 @@ void CPU::clock() {
     
     uint8_t additional_cycle2 = (this->*lookup[opcode].operate)();
 
-    uint8_t instruction_cycles = base_cycles + (additional_cycle1 & additional_cycle2) + cycles;
+    last_instruction_cycles = base_cycles + (additional_cycle1 & additional_cycle2) + cycles;
     
-    total_cycles += instruction_cycles;
+    total_cycles += last_instruction_cycles;
 }
 
 

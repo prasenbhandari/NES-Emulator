@@ -7,8 +7,14 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 # Include directories
 include_directories(include)
 
+# Find Raylib
+find_package(raylib REQUIRED)
+
 # Find all source files in src directory
 file(GLOB_RECURSE SOURCES "src/*.cpp")
 
 # Create the executable
 add_executable(NES ${SOURCES})
+
+# Link Raylib
+target_link_libraries(NES raylib)
