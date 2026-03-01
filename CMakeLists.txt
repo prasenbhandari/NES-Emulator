@@ -4,6 +4,13 @@ project(NES VERSION 1.0)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
+# # Optimization flags for performance
+# if(NOT CMAKE_BUILD_TYPE)
+#     set(CMAKE_BUILD_TYPE Release)
+# endif()
+
+add_compile_options(-O3 -g -fno-omit-frame-pointer)
+
 # Include directories
 include_directories(include)
 

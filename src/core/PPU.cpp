@@ -3,6 +3,7 @@
 PPU::PPU() {
     registers.fill(0);
     vram_address = 0x0000;
+    oam.fill(0xFF);
 }
 
 void PPU::connect_cartridge(Cartridge* cart) {
@@ -21,6 +22,12 @@ void PPU::reset(){
     data_buffer = 0;
     scanline = 0;
     cycle = 0;
+    oam.fill(0xFF);
+    sprite_count = 0;
+    sprite_pattern_low.fill(0x00);
+    sprite_pattern_high.fill(0x00);
+    sprite_x_counter.fill(0xFF);
+    sprite_attribute.fill(0x00);
 }
 
 uint8_t PPU::cpu_read(uint16_t addr) {
@@ -255,16 +262,77 @@ void PPU::extract_pixel(){
         bg_palette = 0; // Use universal background color for palette 0
     }
 
-    uint8_t palette_index = read(0x3F00 + (bg_palette << 2) + bg_pixel) & 0x3F;
+    uint8_t sp_pixel = 0x00;
+    uint8_t sp_palette = 0x00;
+    uint8_t sp_priority = 0x00;
+    bool    sp_is_zero = false;
+
+    if (registers[0x0001] & 0x10) {
+        for (uint8_t i = 0; i < sprite_count; i++) {
+            if (sprite_x_counter[i] != 0) continue;
+
+            uint8_t lo = (sprite_pattern_low[i] & 0x80) >> 7;
+            uint8_t hi = (sprite_pattern_high[i] & 0x80) >> 6;
+            uint8_t pixel = hi | lo;
+
+            if (pixel != 0) {
+                sp_pixel = pixel;
+                sp_palette = (sprite_attribute[i] & 0x03) + 4;
+                sp_priority = (sprite_attribute[i] >> 5) & 0x01;
+                sp_is_zero = (i == 0) && sprite_zero_hit;
+                break;
+            }
+        }
+    }
+
+    // Left-edge sprite clipping (PPUMASK bit 2)
+    if (!(registers[0x0001] & 0x04) && cycle <= 8) {
+        sp_pixel = 0;
+    }
+
+    uint8_t  final_pixel = 0x00;
+    uint8_t  final_palette = 0x00;
+
+    if (bg_pixel == 0 && sp_pixel == 0) {
+        final_pixel = 0;
+        final_palette = 0;
+    } else if (bg_pixel == 0 && sp_pixel != 0) {
+        final_pixel = sp_pixel;
+        final_palette = sp_palette;
+    } else if (bg_pixel != 0 && sp_pixel == 0) {
+        final_pixel = bg_pixel;
+        final_palette = bg_palette;
+    } else {
+        if (sp_priority == 0) {
+            final_pixel = sp_pixel;
+            final_palette = sp_palette;
+        } else {
+            final_pixel = bg_pixel;
+            final_palette = bg_palette;
+        }
+
+        // Sprite 0 hit detection
+        if (sp_is_zero &&
+            (registers[0x0001] & 0x08) &&
+            (registers[0x0001] & 0x10) &&
+            cycle != 256) {
+            bool bg_left_clip = !(registers[0x0001] & 0x02);
+            bool sp_left_clip = !(registers[0x0001] & 0x04);
+            if ((!bg_left_clip && !sp_left_clip) || cycle > 8) {
+                registers[0x0002] |= 0x40;
+            }
+        }
+    }
+
+    uint8_t palette_index = read(0x3F00 + (final_palette << 2) + final_pixel) & 0x3F;
     
     // Apply greyscale mode
     if (registers[0x0001] & 0x01) {
         palette_index &= 0x30;
     }
     
-    uint32_t color = NES_PALETTE[palette_index];
     uint32_t pixel_index = (scanline * 256) + (cycle - 1);
-    frame_buffer[pixel_index] = color;
+    frame_buffer[pixel_index] = NES_PALETTE[palette_index];
 }
 
 void PPU::clock() {
@@ -272,7 +340,7 @@ void PPU::clock() {
 
     if (rendering_enabled && (scanline < 240 || scanline == 261) && 
         ((cycle >= 1 && cycle <= 256) || (cycle >= 321 && cycle <= 336))) {
-        switch ((cycle - 1) % 8) {
+        switch ((cycle) % 8) {
             case 0:{
                 bg_pattern_shift_low = (bg_pattern_shift_low & 0xFF00) | bg_next_tile_lsb;
                 bg_pattern_shift_high = (bg_pattern_shift_high & 0xFF00) | bg_next_tile_msb;
@@ -280,7 +348,7 @@ void PPU::clock() {
                 uint8_t palette_id = bg_next_tile_attribute;
 
                 if (vram_address & 0x02) palette_id >>= 2;
-                if(vram_address & 0x40) palette_id >>= 4;
+                if (vram_address & 0x40) palette_id >>= 4;
 
                 palette_id &= 0x03;
 
@@ -289,7 +357,6 @@ void PPU::clock() {
 
                 if((vram_address & MASK_COARSE_X) == 31){
                     vram_address &= ~MASK_COARSE_X;
-
                     vram_address ^= 0x0400;
                 }else{
                     vram_address++;
@@ -338,6 +405,100 @@ void PPU::clock() {
         }
     }
 
+    // Clear secondary OAM at the start of sprite evaluation
+    if (rendering_enabled && (scanline < 240 || scanline == 261) && cycle == 65){
+        secondary_oam.fill({0xFF, 0xFF, 0xFF, 0xFF});
+    }
+
+    // Sprite Evaluation
+    if (rendering_enabled && (scanline < 240 || scanline == 261) && cycle == 257){
+        sprite_count = 0;
+        sprite_zero_hit = false;
+
+        for(int i = 0; i < 64; i++){
+            uint8_t y_pos = oam[i * 4];
+            uint8_t sprite_height = (registers[0x0000] & 0x20) ? 16 : 8;
+
+            if (scanline >= y_pos && scanline < y_pos + sprite_height) {
+                if (sprite_count < 8){
+                    secondary_oam[sprite_count] = {y_pos, oam[i * 4 + 1], oam[i * 4 + 2], oam[i * 4 + 3]};
+                    if (i == 0) {
+                        sprite_zero_hit = true;
+                    }
+                    sprite_count++;
+                } else {
+                    registers[0x0002] |= 0x20; // Set sprite overflow flag
+                    break;
+                }
+            }
+        }
+    }
+
+    if (rendering_enabled && (scanline < 240 || scanline == 261) && cycle >= 257 && cycle <= 320){
+        uint8_t slot = (cycle - 257) / 8;
+        uint8_t cycle_offset = (cycle - 257) % 8;
+
+        if (slot < sprite_count) {
+            const Sprite& sp = secondary_oam[slot];
+            bool flip_h = sp.attributes & 0x40;
+            bool flip_v = sp.attributes & 0x80;
+
+            if (cycle_offset == 0) {
+                sprite_attribute[slot] = sp.attributes;
+                sprite_x_counter[slot] = sp.x_position;
+            } else if (cycle_offset == 4 || cycle_offset == 6) {
+                uint16_t addr = 0x0000;
+                bool is_8x16 = registers[0x0000] & 0x20;
+
+                if (!is_8x16) {
+                    uint16_t table_base = (registers[0x0000] & 0x08) ? 0x1000 : 0x0000;
+                    uint8_t tile_row = static_cast<uint8_t>(scanline - sp.y_position);
+                    if (flip_v) tile_row = 7 - tile_row;
+                    addr = table_base + (sp.tile_index * 16) + tile_row;
+                } else {
+                    uint16_t table_base = (sp.tile_index & 0x01) ? 0x1000 : 0x0000;
+                    uint8_t  tile_top = sp.tile_index & 0xFE;
+                    uint8_t  tile_row = static_cast<uint8_t>(scanline - sp.y_position);
+                    if (flip_v) tile_row = 15 - tile_row;
+                    if (tile_row >= 8) { 
+                        tile_row -= 8;
+                        tile_top++;
+                    }
+                    addr = table_base + (tile_top * 16) + tile_row;
+                }
+
+                auto flip_byte = [](uint8_t b) -> uint8_t {
+                    b = static_cast<uint8_t>((b & 0xF0) >> 4 | (b & 0x0F) << 4);
+                    b = static_cast<uint8_t>((b & 0xCC) >> 2 | (b & 0x33) << 2);
+                    b = static_cast<uint8_t>((b & 0xAA) >> 1 | (b & 0x55) << 1);
+                    return b;
+                };
+
+                if (cycle_offset == 4) {
+                    uint8_t lo = read(addr);
+                    sprite_pattern_low[slot] = flip_h ? flip_byte(lo) : lo;
+                } else {
+                    uint8_t hi = read(addr + 8);
+                    sprite_pattern_high[slot] = flip_h ? flip_byte(hi) : hi;
+                }
+            }
+        } else {
+            if (cycle_offset == 0) {
+                sprite_attribute[slot] = 0x00;
+                sprite_x_counter[slot] = 0xFF;
+            } else if (cycle_offset == 4 || cycle_offset == 6) {
+                uint16_t dummy_addr = (registers[0x0000] & 0x08) ? 0x1FF0 : 0x0FF0;
+                if(cycle_offset == 4) {
+                    read(dummy_addr);
+                    sprite_pattern_low[slot] = 0x00;
+                } else {
+                    read(dummy_addr + 8);
+                    sprite_pattern_high[slot] = 0x00;
+                }
+            }
+        }
+    }
+
     if (rendering_enabled && (scanline < 240 || scanline == 261) && cycle == 257){
         vram_address = (vram_address & ~0x041F) | (temp_vram_address & 0x041F);
     }
@@ -358,6 +519,17 @@ void PPU::clock() {
         bg_pattern_shift_high <<= 1;
         bg_attribute_shift_low <<= 1;
         bg_attribute_shift_high <<= 1;
+    }
+
+    if (rendering_enabled && scanline < 240 && cycle >= 1 && cycle <= 256) {
+        for (uint8_t i = 0; i < 8; i++) {
+            if (sprite_x_counter[i] > 0) {
+                sprite_x_counter[i]--;
+            } else {
+                sprite_pattern_low[i]  <<= 1;
+                sprite_pattern_high[i] <<= 1;
+            }
+        }
     }
 
     if (rendering_enabled && (scanline < 240 || scanline == 261) && 

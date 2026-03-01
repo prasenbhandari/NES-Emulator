@@ -20,10 +20,15 @@ class Bus {
         uint8_t read(uint16_t addr);
         void write(uint16_t addr, uint8_t data);
 
+        uint16_t dma_stall_cycles = 0;
+        uint8_t controller_state = 0x00;
+
     private:
         CPU* cpu = nullptr;
         PPU* ppu = nullptr;
         APU* apu = nullptr;
         Cartridge* cartridge = nullptr;
         std::array<uint8_t, 2048> cpu_ram;
+        uint8_t controller_shift = 0;
+        bool is_latching = false;
 };

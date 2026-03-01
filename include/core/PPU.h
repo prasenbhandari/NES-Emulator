@@ -26,11 +26,6 @@ class PPU {
     
     private:
         Cartridge* cartridge = nullptr;
-        
-        // Memory
-        std::array<uint8_t, 2048> vram;
-        std::array<uint8_t, 32> palette;
-        std::array<uint8_t, 256> oam;
 
         struct Sprite{
             uint8_t y_position;
@@ -38,8 +33,24 @@ class PPU {
             uint8_t attributes;
             uint8_t x_position;
         };
+        
+        // Memory
+        std::array<uint8_t, 2048> vram;
+        std::array<uint8_t, 32> palette;
 
+        std::array<uint8_t, 256> oam;
         std::array<Sprite, 8> secondary_oam;
+        uint8_t primary_oam_index = 0;
+
+        // Sprite rendering state
+        std::array<uint8_t, 8> sprite_pattern_low = {};
+        std::array<uint8_t, 8> sprite_pattern_high = {};
+        std::array<uint8_t, 8> sprite_attribute = {};
+        std::array<uint8_t, 8> sprite_x_counter = {};
+        uint8_t sprite_count = 0;
+        bool sprite_zero_hit= false;
+    
+
         // Registers
         std::array<uint8_t, 8> registers;
         uint8_t fine_x = 0x00;
@@ -82,14 +93,14 @@ class PPU {
         std::array<uint32_t, 256 * 240> frame_buffer = {0};
 
         const std::array<uint32_t, 64> NES_PALETTE = {
-            0x626262, 0x001FB2, 0x0015EE, 0x3B0DC4, 0x6D07BC, 0x721B6D, 0x682310, 0x543D00,
-            0x2D5500, 0x005400, 0x004F08, 0x003A20, 0x002E55, 0x000000, 0x000000, 0x000000,
-            0xAEAEAE, 0x0D57FF, 0x404FFF, 0x7B2FFF, 0xBE29FF, 0xC946FF, 0xC05E48, 0x9B7100,
-            0x6B9100, 0x2BA100, 0x009924, 0x008A4F, 0x007B9C, 0x000000, 0x000000, 0x000000,
-            0xFFFFFF, 0x0FB7FF, 0x5B9FFF, 0x9B7FFF, 0xF379FF, 0xFF7BFF, 0xFF9C6D, 0xFFB347,
-            0xDCC93D, 0x9FD900, 0x4FDF4F, 0x1FD77F, 0x3FCCC7, 0x000000, 0x000000, 0x000000,
-            0xFFFFFF, 0xA7E7FF, 0xC7D7FF, 0xD7C7FF, 0xF7C7FF, 0xFFC7FF, 0xFFD7BF, 0xFFE7A7,
-            0xF7F797, 0xD7FF7F, 0xB7FF9F, 0x9FFFBF, 0xA7FFD7, 0xC7C7C7, 0x000000, 0x000000
+            0xFF666666, 0xFF882A00, 0xFFA71214, 0xFFA4003B, 0xFF7E005C, 0xFF40006E, 0xFF00066C, 0xFF001D56,
+            0xFF003533, 0xFF00480B, 0xFF005200, 0xFF084F00, 0xFF4D4000, 0xFF000000, 0xFF000000, 0xFF000000,
+            0xFFADADAD, 0xFFD95F15, 0xFFFF4042, 0xFFFE2775, 0xFFCC1AA0, 0xFF7B1EB7, 0xFF2031B5, 0xFF004E99,
+            0xFF006D6B, 0xFF008738, 0xFF00930C, 0xFF328F00, 0xFF8D7C00, 0xFF000000, 0xFF000000, 0xFF000000,
+            0xFFFFFEFF, 0xFFFFB064, 0xFFFF9092, 0xFFFF76C6, 0xFFFF6AF3, 0xFFCC6EFE, 0xFF7081FE, 0xFF229EEA,
+            0xFF00BEBC, 0xFF00D888, 0xFF30E45C, 0xFF82E045, 0xFFDECD48, 0xFF4F4F4F, 0xFF000000, 0xFF000000,
+            0xFFFFFEFF, 0xFFFFDFC0, 0xFFFFD2D3, 0xFFFFC8E8, 0xFFFFC2FB, 0xFFEAC4FE, 0xFFC5CCFE, 0xFFA5D8F7,
+            0xFF94E5E4, 0xFF96EFCF, 0xFFABF4BD, 0xFFCCF3B3, 0xFFF2EBB5, 0xFFB8B8B8, 0xFF000000, 0xFF000000
         };
 
         // Internal read/write

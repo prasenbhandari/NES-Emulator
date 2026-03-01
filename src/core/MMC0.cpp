@@ -24,7 +24,9 @@ uint8_t MMC0::ppu_read(uint16_t addr) {
 }
 
 void MMC0::ppu_write(uint16_t addr, uint8_t data) {
-    // No-op
+    if (chr_rom_banks == 0) {
+        chr_rom[addr & 0x1FFF] = data;
+    }
 }
 
 

@@ -5,29 +5,35 @@ void Platform::init_window(int width, int height) {
     window_width = width * scale_factor;
     window_height = height * scale_factor;
     InitWindow(window_width, window_height, "NES Emulator");
+
+    screen_image = GenImageColor(256, 240, BLACK);
+    screen_texture = LoadTextureFromImage(screen_image);
 }
 
-void Platform::handle_input() {
+void Platform::handle_input(uint8_t& controller_state) {
     if (WindowShouldClose()) {
         close_window = true;
     }
+
+    controller_state = 0x00;
+
+    if (IsKeyDown(KEY_Z)) controller_state |= 0x80; // A
+    if (IsKeyDown(KEY_X)) controller_state |= 0x40; // B
+    if (IsKeyDown(KEY_SPACE)) controller_state |= 0x20; // Select
+    if (IsKeyDown(KEY_ENTER)) controller_state |= 0x10; // Start
+    if (IsKeyDown(KEY_UP)) controller_state |= 0x08; // Up
+    if (IsKeyDown(KEY_DOWN)) controller_state |= 0x04; // Down
+    if (IsKeyDown(KEY_LEFT)) controller_state |= 0x02; // Left
+    if (IsKeyDown(KEY_RIGHT)) controller_state |= 0x01; // Right
 }
 
 void Platform::render_frame(const std::array<uint32_t, 256 * 240>& frame_buffer) {
+    UpdateTexture(screen_texture, frame_buffer.data());
     BeginDrawing();
     ClearBackground(BLACK);
+    DrawTextureEx(screen_texture, {0, 0}, 0.0f, static_cast<float>(scale_factor), WHITE);
 
-    for (int y = 0; y < 240; y++) {
-        for (int x = 0; x < 256; x++) {
-            uint32_t rgb = frame_buffer[y * 256 + x];
-            uint8_t r = (rgb >> 16) & 0xFF;
-            uint8_t g = (rgb >> 8) & 0xFF;
-            uint8_t b = rgb & 0xFF;
-            Color color = { r, g, b, 255 };
-            DrawRectangle(x * scale_factor, y * scale_factor, scale_factor, scale_factor, color);
-        }
-    }
-
+    DrawFPS(10,10);
     EndDrawing();
 }
 

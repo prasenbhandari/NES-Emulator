@@ -423,7 +423,7 @@ void CPU::reset(){
     set_flag(I, true);
     set_flag(U, true);
 
-    cycles = 7;
+    cycles = 0;
 }
 
 // IRQ
@@ -469,11 +469,18 @@ uint8_t CPU::stack_pop() {
 }
 
 void CPU::clock() {
+    // Stall during OAM DMA
+    if (bus->dma_stall_cycles > 0) {
+        bus->dma_stall_cycles--;
+        last_instruction_cycles = 1;
+        total_cycles++;
+        return;
+    }
+
     opcode = read(pc++);
-    
-    cycles = 0;
 
     uint8_t base_cycles = lookup[opcode].cycles;
+    cycles = 0;
     
     uint8_t additional_cycle1 = (this->*lookup[opcode].addr_mode)();
     
@@ -482,6 +489,7 @@ void CPU::clock() {
     last_instruction_cycles = base_cycles + (additional_cycle1 & additional_cycle2) + cycles;
     
     total_cycles += last_instruction_cycles;
+
 }
 
 

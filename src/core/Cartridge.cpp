@@ -1,6 +1,8 @@
+#include <iostream>
+#include <fstream>
+
 #include "core/Cartridge.h"
 #include "core/MMC0.h"
-#include <fstream>
 
 Cartridge::Cartridge(){
     
@@ -41,6 +43,8 @@ bool Cartridge::load(const std::string &filename) {
     }
 
     mapper_id = ((header.mapper2 & 0xF0) | (header.mapper1 >> 4));
+    std::cout << "In cartridge load" << std::endl;
+    std::cout << "Mapper ID: " << (int)mapper_id << std::endl;
 
     prg_ram.resize(header.prg_ram_size * 8192, 0x00);
 

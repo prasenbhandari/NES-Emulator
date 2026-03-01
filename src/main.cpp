@@ -5,15 +5,20 @@
 #include "platform/Platform.h"
 #include <iostream>
 
-int main() {
+int main(int argc, char* argv[]) {
+    if(argc < 2){
+        std::cerr << "Usage: " << argv[0] << " <path_to_rom>" << std::endl;
+        return 1;
+    }
+
     Bus bus;
     CPU cpu;
     PPU ppu;
     Cartridge cartridge;
     Platform platform;
 
-    if (!cartridge.load("../roms/Pac-Man (USA) (Namco).nes")) {
-        std::cerr << "Failed to load cartridge!" << std::endl;
+    if (!cartridge.load(argv[1])) {
+        std::cerr << "Failed to load: " << argv[1] << std::endl;
         return 1;
     }
 
@@ -34,7 +39,6 @@ int main() {
 
     // Main emulation loop
     while (!platform.should_close()) {
-        platform.handle_input();
 
         // Execute one CPU instruction
         cpu.clock();
@@ -42,7 +46,6 @@ int main() {
         uint8_t cpu_cycles = cpu.get_last_instruction_cycles();
         for (uint8_t i = 0; i < cpu_cycles * 3; i++) {
             ppu.clock();
-            
             // Check for NMI from PPU during PPU execution
             if (ppu.nmi_occurred) {
                 cpu.nmi();
@@ -52,6 +55,7 @@ int main() {
 
         // Render when frame is complete
         if (ppu.frame_complete) {
+            platform.handle_input(bus.controller_state);
             platform.render_frame(ppu.get_frame_buffer());
             ppu.frame_complete = false;
         }
