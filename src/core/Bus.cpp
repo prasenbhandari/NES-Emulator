@@ -24,7 +24,7 @@ uint8_t Bus::read(uint16_t addr) {
         return 0x00;
     } else if (addr >= 0x4000 && addr < 0x4018) {
         return 0x00;  // APU stub
-    } else if (addr >= 0x8000 && addr <= 0xFFFF) {
+    } else if (addr >= 0x6000 && addr <= 0xFFFF) {
         return cartridge->cpu_read(addr);
     }
 
@@ -53,7 +53,7 @@ void Bus::write(uint16_t addr, uint8_t data) {
         }
     } else if (addr >= 0x4000 && addr < 0x4018) {
         // APU stub - ignore writes for now
-    } else if (addr >= 0x8000 && addr <= 0xFFFF){
+    } else if (addr >= 0x6000 && addr <= 0xFFFF){
         cartridge->cpu_write(addr, data);
     }
 }

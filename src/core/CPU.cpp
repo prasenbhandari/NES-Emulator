@@ -692,7 +692,7 @@ uint8_t CPU::BRK() {
     stack_push(pc & 0x00FF);
 
     // You push the status with B flag set and not set the actual flag in the status register
-    stack_push(status | ~B);
+    stack_push(status | B);
     set_flag(I, true);
 
     uint16_t lo = read(0xFFFE);

@@ -6,7 +6,9 @@
 enum class MirrorMode {
     HORIZONTAL,
     VERTICAL,
-    FOUR_SCREEN
+    FOUR_SCREEN,
+    SINGLE_SCREEN_LOWER,
+    SINGLE_SCREEN_UPPER,
 };
 
 class Mapper {
@@ -20,10 +22,13 @@ class Mapper {
 
 
     public:
-        virtual MirrorMode get_mirror_mode() const = 0;
+        MirrorMode get_mirror_mode() const { return mirror_mode; }
         void set_mirror_mode(MirrorMode mode) { mirror_mode = mode; }
 
-        Mapper(uint8_t prg_rom_banks, uint8_t chr_rom_banks, std::vector<uint8_t> &prg_rom, std::vector<uint8_t> &chr_rom);
+        Mapper(uint8_t prg_rom_banks,
+            uint8_t chr_rom_banks, 
+            std::vector<uint8_t> &prg_rom, 
+            std::vector<uint8_t> &chr_rom);
         ~Mapper();
 
         virtual uint8_t cpu_read(uint16_t addr) = 0;

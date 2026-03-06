@@ -2,7 +2,8 @@
 #include <fstream>
 
 #include "core/Cartridge.h"
-#include "core/MMC0.h"
+#include "core/Mappers/MMC0.h"
+#include "core/Mappers/MMC1.h"
 
 Cartridge::Cartridge(){
     
@@ -46,12 +47,18 @@ bool Cartridge::load(const std::string &filename) {
     std::cout << "In cartridge load" << std::endl;
     std::cout << "Mapper ID: " << (int)mapper_id << std::endl;
 
-    prg_ram.resize(header.prg_ram_size * 8192, 0x00);
+    prg_ram.resize((header.prg_ram_size == 0 ? 1 : header.prg_ram_size) * 8192, 0x00);
 
-    if (mapper_id == 0) {
-        mapper = new MMC0(header.prg_rom_chunks, header.chr_rom_chunks, prg_rom, chr_rom);
+    switch(mapper_id) {
+        case 0:
+            mapper = new MMC0(header.prg_rom_chunks, header.chr_rom_chunks, prg_rom, chr_rom);
+            break;
+        case 1:
+            mapper = new MMC1(header.prg_rom_chunks, header.chr_rom_chunks, prg_rom, chr_rom, prg_ram);
+            break;
+        default:
+            return false;
     }
-    // TODO: Add other mappers here
 
     // Set mirroring mode from iNES header
     if (mapper) {

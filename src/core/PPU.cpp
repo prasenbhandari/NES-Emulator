@@ -146,6 +146,10 @@ void PPU::cpu_write(uint16_t addr, uint8_t data) {
 
 
 uint16_t PPU::apply_mirroring(uint16_t addr) {
+    if (cartridge && cartridge->get_mapper()) {
+        mirror_mode = cartridge->get_mapper()->get_mirror_mode();
+    }
+
     if (addr < 0x2000 || addr >= 0x3000) {
         return addr;
     }
@@ -162,12 +166,16 @@ uint16_t PPU::apply_mirroring(uint16_t addr) {
         // Horizontal: rows are mirrored
         // $2000-$23FF same as $2400-$27FF (clear bit 10)
         // $2800-$2BFF same as $2C00-$2FFF (clear bit 10)
-        nt_addr &= 0xFBFF;  // Clear bit 11
+        nt_addr &= 0xFBFF;
     } else if (mirror_mode == MirrorMode::VERTICAL) {
         // Vertical: columns are mirrored
         // $2000-$23FF same as $2800-$2BFF (clear bit 11)
         // $2400-$27FF same as $2C00-$2FFF (clear bit 11)
-        nt_addr &= 0xF7FF;  // Clear bit 10
+        nt_addr &= 0xF7FF;
+    } else if (mirror_mode == MirrorMode::SINGLE_SCREEN_LOWER) {
+        nt_addr &= 0x03FF;
+    } else if (mirror_mode == MirrorMode::SINGLE_SCREEN_UPPER) {
+        nt_addr = 0x0400 | (nt_addr & 0x03FF);
     }
     
     return 0x2000 + nt_addr;
@@ -415,11 +423,12 @@ void PPU::clock() {
         sprite_count = 0;
         sprite_zero_hit = false;
 
+        uint16_t eval_line = (scanline == 261) ? 0 : (scanline + 1);
         for(int i = 0; i < 64; i++){
             uint8_t y_pos = oam[i * 4];
             uint8_t sprite_height = (registers[0x0000] & 0x20) ? 16 : 8;
-
-            if (scanline >= y_pos && scanline < y_pos + sprite_height) {
+            
+            if (eval_line >= y_pos && eval_line < y_pos + sprite_height) {
                 if (sprite_count < 8){
                     secondary_oam[sprite_count] = {y_pos, oam[i * 4 + 1], oam[i * 4 + 2], oam[i * 4 + 3]};
                     if (i == 0) {
@@ -452,13 +461,13 @@ void PPU::clock() {
 
                 if (!is_8x16) {
                     uint16_t table_base = (registers[0x0000] & 0x08) ? 0x1000 : 0x0000;
-                    uint8_t tile_row = static_cast<uint8_t>(scanline - sp.y_position);
+                    uint8_t tile_row = static_cast<uint8_t>(((scanline == 261) ? 0 : scanline + 1) - sp.y_position);
                     if (flip_v) tile_row = 7 - tile_row;
                     addr = table_base + (sp.tile_index * 16) + tile_row;
                 } else {
                     uint16_t table_base = (sp.tile_index & 0x01) ? 0x1000 : 0x0000;
                     uint8_t  tile_top = sp.tile_index & 0xFE;
-                    uint8_t  tile_row = static_cast<uint8_t>(scanline - sp.y_position);
+                    uint8_t  tile_row = static_cast<uint8_t>(((scanline == 261) ? 0 : scanline + 1) - sp.y_position);
                     if (flip_v) tile_row = 15 - tile_row;
                     if (tile_row >= 8) { 
                         tile_row -= 8;
@@ -487,7 +496,7 @@ void PPU::clock() {
                 sprite_attribute[slot] = 0x00;
                 sprite_x_counter[slot] = 0xFF;
             } else if (cycle_offset == 4 || cycle_offset == 6) {
-                uint16_t dummy_addr = (registers[0x0000] & 0x08) ? 0x1FF0 : 0x0FF0;
+                uint16_t dummy_addr = (registers[0x0000] & 0x10) ? 0x1FF0 : 0x0FF0;
                 if(cycle_offset == 4) {
                     read(dummy_addr);
                     sprite_pattern_low[slot] = 0x00;
@@ -566,6 +575,7 @@ void PPU::clock() {
                 cycle = 0;
                 scanline = 0;
                 frames++;
+                frame_complete = true;
             }
         }
     }

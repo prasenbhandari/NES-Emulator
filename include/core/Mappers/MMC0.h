@@ -14,6 +14,4 @@ class MMC0 : public Mapper {
 
         uint8_t ppu_read(uint16_t addr) override;
         void ppu_write(uint16_t addr, uint8_t data) override;
-
-        MirrorMode get_mirror_mode() const override;
 };

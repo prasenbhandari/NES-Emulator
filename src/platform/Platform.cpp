@@ -1,10 +1,10 @@
 #include "platform/Platform.h"
 
 void Platform::init_window(int width, int height) {
-    SetTargetFPS(60);
     window_width = width * scale_factor;
     window_height = height * scale_factor;
     InitWindow(window_width, window_height, "NES Emulator");
+    SetTargetFPS(60);
 
     screen_image = GenImageColor(256, 240, BLACK);
     screen_texture = LoadTextureFromImage(screen_image);
